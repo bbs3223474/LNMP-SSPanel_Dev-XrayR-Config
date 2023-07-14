@@ -107,5 +107,5 @@ PHP_Modules_Options='--enable-maintainer-zts'
 
 
 <!-- 文内引用链接 -->
-[安装LNMP的要点]: ./README.md#一、安装LNMP的要点
-[Nginx可选模块的选装]: ./README.md#1.%20Nginx可选模块的选装
+[安装LNMP的要点]: ./README.md#一安装LNMP的要点
+[Nginx可选模块的选装]: ./README.md#1-Nginx可选模块的选装
