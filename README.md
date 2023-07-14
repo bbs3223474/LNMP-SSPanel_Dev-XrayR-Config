@@ -15,8 +15,8 @@ LNMP：https://lnmp.org
 ---
 
 ### 目录：
-[一、安装LNMP的要点](https://github.com/bbs3223474/LNMP-SSPanel_Dev-XrayR-Config/tree/main#%E4%B8%80%E5%AE%89%E8%A3%85lnmp%E7%9A%84%E8%A6%81%E7%82%B9)
-   1. Nginx可选模块的选装
+[一、安装LNMP的要点][安装LNMP的要点]
+   [1. Nginx可选模块的选装][Nginx可选模块的选装]
    2. PHP必要模块的安装
    3. Redis的安装
    4. MariaDB的安装与升级
@@ -57,7 +57,7 @@ sudo yum -y install git wget vim nano socat
 
 在后续的内容中，默认你已经获得了系统的root权限，所有操作在root账户下进行。如果没有进入root账户，请自行在命令前添加sudo，或参照附录获得root权限。
 
-- #### 一、安装LNMP的要点
+#### 一、安装LNMP的要点
 1. Nginx可选模块的安装
 
 总体来说，LNMP本身的安装没有什么难度，但为了后续操作，我们可能还需要修改一些代码。但这一步也不一定每位同学都需要做，你可以根据我下面的说明自行选择。
@@ -101,3 +101,9 @@ PHP_Modules_Options='--enable-maintainer-zts'
 ```
 
 安装时，PHP选择8.1或8.2，MariaDB选择10.11，MemoryAllocator是否安装自行决定，直接开始编译安装即可。作为参考，目前个人使用MariaDB 10.11.2和PHP 8.1.18的组合。
+
+
+
+<!-- 文内引用链接 -->
+[安装LNMP的要点]: ./Readme.md#一、安装LNMP的要点
+[Nginx可选模块的选装]: ./Readme.md#1. Nginx可选模块的选装
