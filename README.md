@@ -10,14 +10,14 @@ SSPanel-Uim：https://github.com/Anankke/SSPanel-UIM
 
 XrayR：https://github.com/XrayR-project
 
-LNMP：https://www.lnmp.org
+LNMP：https://lnmp.org
 
 ---
 
 ### 目录：
-一、安装LNMP的要点
+[一、安装LNMP的要点](https://github.com/bbs3223474/LNMP-SSPanel_Dev-XrayR-Config/edit/main/README.md#%E4%B8%80%E5%AE%89%E8%A3%85lnmp%E7%9A%84%E8%A6%81%E7%82%B9)
    1. Nginx可选模块的选装
-   2. PHP可选模块的安装
+   2. PHP必要模块的安装
    3. Redis的安装
    4. MariaDB的安装与升级
    5. 部分Nginx功能的禁用
@@ -44,3 +44,60 @@ LNMP：https://www.lnmp.org
 
 ---
 
+首先，我个人推荐使用FinalShell作为SSH工具连接服务器操作。该软件提供了比较完善的图形化界面和直观的文件管理工具，可以让你在不输入命令的情况下轻松编辑文件。详情请访问：https://www.hostbuf.com/
+
+如果你不喜欢FinalShell，也可以自行选择熟悉的SSH客户端进行操作。本教程将部分参照FinalShell的操作方式进行。
+
+本教程将基于RockyOS 8（即CentOS 8的平替版本）进行编写。使用Debian或Ubuntu的同学请自行替换命令内容。
+
+全新的VPS在操作前，建议先安装一些基本的工具和依赖：
+```
+sudo yum -y install git wget vim nano socat
+```
+
+在后续的内容中，默认你已经获得了系统的root权限，所有操作在root账户下进行。如果没有进入root账户，请自行在命令前添加sudo，或参照附录获得root权限。
+
+- #### 一、安装LNMP的要点
+1. Nginx可选模块的安装
+
+总体来说，LNMP本身的安装没有什么难度，但为了后续操作，我们可能还需要修改一些代码。但这一步也不一定每位同学都需要做，你可以根据我下面的说明自行选择。
+首先下载LNMP并解压到当前目录：
+```
+wget http://soft.vpser.net/lnmp/lnmp2.0.tar.gz -O lnmp2.0.tar.gz && tar zxf lnmp2.0.tar.gz && cd lnmp2.0
+```
+
+进入lnmp目录后，修改当前目录下的lnmp.conf：
+```
+vim lnmp.conf
+```
+
+分别为Nginx和PHP添加“--with-stream_ssl_preread_module”和“--enable-maintainer-zts”命令。其中，SSL_Preread模块可用于希望V2Ray和Trojan并存、且不会与Nginx监听端口冲突的情况（本文不会涉及，具体原因在附录中解释）。至于Maintainer-Zts，个人在我自己的服务器上并没有启用，暂时不是很清楚这个功能是做什么的，各位可以酌情使用。最终修改的代码如下：
+```
+Download_Mirror='https://soft.vpser.net'
+
+Nginx_Modules_Options='--with-stream_ssl_preread_module'
+PHP_Modules_Options='--enable-maintainer-zts'
+略
+```
+
+保存退出文本编辑器（vim使用英文冒号+wq回车，FinalShell可以直接Ctrl+S保存，以后不再赘述）。
+然后编辑include目录下的main.sh，参照本Repo提供的文件，将1GB内存检测的代码注释掉，避免低配置VPS在编译安装MariaDB等时报错：
+```
+（第115行）
+#    if [ "${Bin}" != "y" ] && [[ "${DBSelect}" =~ ^5|[7-9]|10$ ]] && [ $(free -m | grep Mem | awk '{print  $2}') -le 1024 ]; then
+#        echo "Memory less than 1GB, can't install MySQL 8.0 or MairaDB 10.3+!"
+#        exit 1
+#    fi
+略
+```
+
+当然，你也可以直接下载本Repo中的文件对它们直接替换，但个人不推荐这样操作。因为LNMP安装包的版本一直在更新，代码也可能会有细微变化，直接替换可能会导致不可预知的后果。
+
+此外，低配置VPS请务必设置好SWAP，即虚拟内存，否则极其容易安装报错。你可以通过swapon -s命令查看当前系统是否存在虚拟内存，如果没有，请参照附录内容手动添加。
+
+以上文件编辑好后，确保当前处在lnmp解压目录下，执行安装脚本：
+```
+./install.sh lnmp
+```
+
+安装时，PHP选择8.1或8.2，MariaDB选择10.11，MemoryAllocator是否安装自行决定，直接开始编译安装即可。作为参考，目前个人使用MariaDB 10.11.2和PHP 8.1.18的组合。
