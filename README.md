@@ -103,7 +103,7 @@ curl fileinfo gd mbstring xml opcache zip json bz2 bcmath redis
 
 **方案1：** 如果你还没有安装LNMP，需要全新安装，则参照上一点修改lnmp.conf，并在PHP_Modules_Options后加入以下内容：
 ```
-PHP_Modules_Options='--enable-curl --enable-fileinfo --enable-gd --enable-mbstring --enable xml --enable-opcache --enable-zip --enable-zip --enable-json --enable-bz2 --enable-bcmath'
+PHP_Modules_Options='--enable-curl --enable-fileinfo --enable-gd --enable-mbstring --enable-xml --enable-opcache --enable-zip --enable-zip --enable-json --enable-bz2 --enable-bcmath'
 ```
 保存并退出lnmp.conf。
 
