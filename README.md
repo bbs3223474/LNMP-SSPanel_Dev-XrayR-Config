@@ -2,7 +2,7 @@
 ---
 ### 前言：
 ### 过去的一年时间，基于SSPanel搭建的飞机场发生了翻天覆地的变化。首先SSPanel完全更换了框架，界面大改，然后V2Ray-Poseidon作者删库跑路，留下我独自在风中凌乱。再加上特定时期总会有那么一批SSL端口甚至服务器IP被毙掉、SSPanel的Wiki其实相当笼统，作者团队也相当高傲（个人觉得差不多相当于“有问题那都是你不会用”）、面板所需要的依赖，以及依赖的依赖总会有所变化、面板对应的数据库结构也总在变化……总之直到憋出这篇个人认为可以分享的经验为止，并不是什么愉快、舒适的过程。但无论如何，这篇Readme还是憋出来了。作为一名学英语的文科生，我会用我可怜的知识储备，尽量将这一路过来的酸甜苦辣给大家分享透彻。当然了，本文所提到的各种解决方案、代码等等，也并非100%按照官方说明和规范进行。有经验的同学可以在我的基础上自行研究更好的内容，而像我一样只会复制粘贴的同学，本文也应该能确保你的项目可以正常跑起来了。
-这里再次提醒：本人搭建机场并非出于商业目的，而是旨在建立一个图形化、规范化、方便管理的平台，用来统一管理多个服务器节点，并且可以在确保不盈利的情况下，通过象征性收取一些费用，与自己身边的熟人朋友进行分享（本人面板下的所有用户交的一年费用，甚至不够抵服务器半年的租金）。因此，追求回本无可厚非，也不会带来什么法律责任，但请不要试图用租赁机场的方式赚钱，出租时也请确保对方人品可靠，用途可控。因为底线不在于你是否绕过了GFW，而在于你有没有因此赚钱，以及你有没有在绕过GFW后做一些违反法律的事情。
+这里再次提醒：本人搭建机场并非出于商业目的，而是旨在建立一个图形化、规范化、方便管理的平台，用来统一管理多个服务器节点，并且可以在确保不盈利的情况下，通过象征性收取一些费用，与自己身边的熟人朋友进行分享（本人面板下的所有用户交的一年费用，甚至不够抵服务器半年的租金）。因此，追求回本无可厚非，也不会带来什么法律责任，但请不要试图用租赁机场的方式赚钱，出租时也请确保对方人品可靠，用途可控。因为底线不在于你是否绕过了GFW，而在于你有没有因此赚钱，以及你有没有在绕过GFW后做一些违反法律的事情（比如诈骗、黑客攻击、钓鱼网站等）。
 
 如果你对本文涉及到的前后端等程序感兴趣，请访问以下链接。在此也特别感谢各路大神提供的各种教程文章。
 
@@ -28,7 +28,8 @@ LNMP：https://lnmp.org
    1. 个人的一些有区别的代码
    2. 旧版数据库迁移的方式
    3. 关于IPv6环境存在的问题
-   4. 移除跨目录访问限制
+   4. Windows及Android客户端的文件包下载
+
 
 三、部署XrayR后端的要点
 
@@ -103,7 +104,7 @@ curl fileinfo gd mbstring xml opcache zip json bz2 bcmath redis
 
 **方案1：** 如果你还没有安装LNMP，需要全新安装，则参照上一点修改lnmp.conf，并在PHP_Modules_Options后加入以下内容：
 ```
-PHP_Modules_Options='--enable-curl --enable-fileinfo --enable-gd --enable-mbstring --enable-xml --enable-opcache --enable-zip --enable-zip --enable-json --enable-bz2 --enable-bcmath'
+PHP_Modules_Options='--enable-curl --enable-fileinfo --enable-gd --enable-mbstring --enable xml --enable-opcache --enable-zip --enable-zip --enable-json --enable-bz2 --enable-bcmath'
 ```
 保存并退出lnmp.conf。
 
@@ -163,7 +164,7 @@ extension=xml
 如果如果发现extension后没有上述安装的模块，你可以手动插入一行并填写好模块名称即可。
 
 #### 3.PHP已禁用功能的恢复
-这个其实是安装SSPanel时老生常谈的步骤了。总体来说就是要启用一些PHP出于安全考虑默认禁用的功能。启用它们对安全性有多大影响我不得而知，但如果不启用的话，很有可能报502 Bad Gateway或其他错误。
+这个其实是安装SSPanel时老生常谈的步骤了。总体来说就是要启用一些PHP或是LNMP出于安全考虑默认禁用的功能。启用它们对安全性有多大影响我不得而知，但如果不启用的话，很有可能报502 Bad Gateway或其他错误。
 
 同样的，还是编辑php.ini，找到disable_functions，将需要打开的功能删掉，这里直接给出改好以后的代码：
 ```
@@ -240,7 +241,7 @@ locale-collate "en_US.UTF-8"
 # administrative / dangerous commands.
 replica-read-only no
 ```
-其中，protected-mode和replica-read-only要设置成no，以避免后续出现“You can't write against a read only replica”的错误（非debug模式下也会HTTP 500）。locale-collate指定好语言和编码，避免启动redis-server时出现“redisFailed to configure LOCALE for invalid locale name”的报错（这也是之前make test时通常会出现的问题）。
+其中，protected-mode和replica-read-only要设置成no，以避免后续出现“You can't write against a read only replica”的错误（非debug模式下会HTTP 500）。locale-collate指定好语言和编码，避免启动redis-server时出现“redisFailed to configure LOCALE for invalid locale name”的报错（这也是之前make test时通常会出现的问题）。
 
 保存并退出redis.conf，执行以下命令启动Redis：
 ```
@@ -272,8 +273,91 @@ redis-cli
 
 如果一定需要改变，[请参照此文章](https://blog.csdn.net/huojiahui22/article/details/122448293)来解决slave的问题。注意：文章中命令行内的IP地址根据你自己输入role后得出的IP地址进行修改，比如我这里的192.168.40.37，端口号6379不变。
 
+#### 二、部署Dev分支SSPanel-Uim的要点
+#### 1.个人的一些有区别的代码
+
+由于SSPanel-Uim的Wiki已经删掉了手动安装和部署的章节，仅保留了Oneinstack下的安装方式，我们能够参考的部分也[基本只有这些](https://wiki.sspanel.org/#/install-using-oneinstack?id=%e9%83%a8%e7%bd%b2-sspanel-uim)了。但本质上，Oneinstack就是个集成度、可定制度更高的LNMP一键安装包。考虑到我们之前已经安装了LNMP，所以这里不需要再安装Oneinstack。
+
+首先，假设你已经拥有域名，并设置好解析，那么就可以使用lnmp vhost add命令添加一个Nginx主机了。具体内容不再赘述，确保创建一个数据库（本文名称将以sspanel为例），是否申请证书自行决定。添加好vhost后，我们可以先行修改网站对应的nginx配置文件，添加好伪静态。
+
+这里你可以直接使用我提供的panel.example.com.conf中的代码完全代替原先的配置文件，使用时注意替换好代码中涉及的域名。按照上一版Wiki的指导，他们将配置文件修改得很简洁，但并不影响网站的正常工作。
+
+你也可以直接在原有文件内容后添加以下代码：
+```
+        location / {
+            try_files $uri /index.php$is_args$args;
+        }
+
+
+        location ~ \.php$ {
+            include fastcgi_params;
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param PATH_INFO $fastcgi_path_info;
+        }
+```
+其中，try_files是一直以来必须要有的伪静态，而fastcgi这一段我并不清楚具体用途，它只在之前的某一版Wiki中出现，但也没有进行解释（而且按照当时他们的代码范例，直接跑起来是会报错的）。当前版本Wiki已经删掉了这部分代码，而我的面板是之前就已经部署好了的，所以进行了保留，似乎也没有产生不良影响。如果你怀疑fastcgi这部分的作用，可以不去添加它。
+
+此外要记住，上述代码需要添加两次，一次放在监听80端口的节下面，一次放在443端口的节下面，此处不再赘述。
+
+之后，修改好网站所在目录，在后面添加“/public”。假设你创建的网站目录为/home/wwwroot/sspanel：
+```
+root /home/wwwroot/sspanel/public; 
+```
+同样注意80和443两节的都要修改。
+
+接下来，在部署网站之前，我们一定要移除LNMP默认的跨目录访问限制，否则浏览器一定会提示502 Bad Gateway。这里你可以使用LNMP安装包tools目录下的remove_open_basedir_restriction.sh，也可以直接手动操作：
+```
+cd /home/wwwroot/sspanel
+chattr -i .user.ini
+rm -y .user.ini
+```
+之后我们就可以参考Wiki内容直接部署网站了：
+```
+git clone -b dev https://github.com/Anankke/SSPanel-Uim.git .
+wget https://getcomposer.org/installer -O composer.phar
+php composer.phar
+php composer.phar install --dev
+```
+按照Wiki原先的内容，最后一行指令使用的是“--no-dev”，但考虑到我们使用的是dev分支，所以我尝试修改成了“--dev”，结果也能够正确执行。
+
+接下来，准备好面板程序的配置文件：
+```
+cp config/.config.example.php config/.config.php
+cp config/appprofile.example.php config/appprofile.php
+```
+然后使用你喜欢的编辑器编辑config/.config.php。里面的内容主要根据自身情况设定，此处不再赘述。
+
+编辑好后，执行php xcat向数据库导入表：
+```
+php xcat Migration new
+php xcat Tool importAllSettings
+php xcat Tool createAdmin
+```
+原文还有php xcat ClientDownload，作用是下载clash之类的客户端压缩包到网站下，以便用户可以点击下载。但我是使用V2RayN和V2RayNG，所以过后再手动下载。另外，上述代码全部用于全新部署的情况。如果你是旧版升级或迁移，请先不要执行上述php xcat，具体参见下一节内容。
+
+最后，使用crontab -e添加一个计划任务，以实现等级过期等检测：
+```
+*/5 * * * * /usr/local/php/bin/php /home/wwwroot/sspanel/xcat  Cron
+```
+注意检查后半部分网站目录是否正确，添加好后:wq回车，保存退出即可。
+
+#### 2.旧版数据库迁移的方式
+
+
+
+#### 3.关于IPv6环境存在的问题
+
+
+
+#### 4.Windows及Android客户端的文件包下载
+
+
 
 
 <!-- 文内引用链接 -->
 [安装LNMP的要点]: ./README.md#一安装LNMP的要点
 [Nginx可选模块的安装]: ./README.md#1nginx可选模块的安装
+[PHP必要模块的安装]:./README.md#2PHP必要模块的安装
+[PHP已禁用功能的恢复]:./README.md#3PHP已禁用功能的恢复
+[Redis的安装及配置]:./README.md#4Redis的安装及配置
