@@ -15,10 +15,9 @@ LNMP：https://lnmp.org
 ---
 
 ### 目录：
-[一、安装LNMP的要点][安装LNMP的要点]
+一、安装LNMP的要点
    
-   [1. Nginx可选模块的安装][Nginx可选模块的安装]
-   
+   1. Nginx可选模块的安装
    2. PHP必要模块的安装
    3. PHP已禁用功能的恢复
    4. Redis的安装及配置
@@ -29,13 +28,14 @@ LNMP：https://lnmp.org
    2. 旧版数据库迁移的方式
    3. 关于IPv6环境存在的问题
    4. Windows及Android客户端的文件包下载
+   5. Clash及Clash兼容客户端的订阅下发问题
 
 
 三、部署XrayR后端的要点
 
-   1. XrayR配置文件
-   2. Nginx配置文件
-   3. 节点信息填写以及Custom-config
+   1. 节点信息填写以及Custom-config
+   2. XrayR配置文件
+   3. Nginx配置文件
    4. 简单分析XrayR log
 
 四、服务器拥塞算法的选择
@@ -61,7 +61,7 @@ sudo yum -y install git wget vim nano socat
 
 #### 一、安装LNMP的要点
 
-#### 1.Nginx可选模块的安装
+#### 1. Nginx可选模块的安装
 <details><summary>点击展开</summary>
 
 总体来说，LNMP本身的安装没有什么难度，但为了后续操作，我们可能还需要修改一些代码。但这一步也不一定每位同学都需要做，你可以根据我下面的说明自行选择。
@@ -75,7 +75,7 @@ vim lnmp.conf
 ```
 为Nginx_Modules_Options添加“--with-stream_ssl_preread_module”命令。
 
-SSL_Preread模块可用于希望V2Ray和Trojan并存、且不会与Nginx监听端口冲突的情况。但如果你不需要V2Ray和Trojan共存，则不需要进行任何修改：
+SSL_Preread模块可用于希望V2Ray和Trojan并存、且不会与Nginx监听端口冲突的情况。但如果你不需要V2Ray和Trojan共存，则不需要进行任何修改。本文也将只会使用V2Ray，具体原因后文解释：
 ```
 Download_Mirror='https://soft.vpser.net'
 
@@ -98,7 +98,7 @@ PHP_Modules_Options=''
 
 </details>
 
-#### 2.PHP必要模块的安装
+#### 2. PHP必要模块的安装
 <details><summary>点击展开</summary>
 
 根据最新的Dev分支SSPanel-Uim的要求，面板所在服务器的PHP必须要安装并启用以下模块，否则部署过程一定会报错：
@@ -170,7 +170,7 @@ extension=xml
 
 </details>
 
-#### 3.PHP已禁用功能的恢复
+#### 3. PHP已禁用功能的恢复
 <details><summary>点击展开</summary>
 
 这个其实是安装SSPanel时老生常谈的步骤了。总体来说就是要启用一些PHP或是LNMP出于安全考虑默认禁用的功能。启用它们对安全性有多大影响我不得而知，但如果不启用的话，很有可能报502 Bad Gateway或其他错误。
@@ -184,7 +184,7 @@ disable_functions = passthru,system,chroot,chgrp,chown,ini_alter,ini_restore,dl,
 
 </details>
 
-#### 4.Redis的安装及配置
+#### 4. Redis的安装及配置
 <details><summary>点击展开</summary>
 
 新版SSPanel-Uim需要依赖Redis实现订阅下发、用户资料编辑（非管理员界面）等功能。如果不安装，在访问部分面板页面时会报HTTP 500错误。开启面板debug模式后会发现诸如“Could not connect to Redis at 127.0.0.1:6379: Connection refused”的提示。可惜的是，在SSPanel-Uim的Wiki中并没有提到这点，似乎他们是按照稳定版的内容去写的wiki，甚至连手动在CentOS中安装的章节都删掉了。
@@ -290,7 +290,7 @@ redis-cli
 
 #### 二、部署Dev分支SSPanel-Uim的要点
 
-#### 1.个人的一些有区别的代码
+#### 1. 个人的一些有区别的代码
 <details><summary>点击展开</summary>
 
 由于SSPanel-Uim的Wiki已经删掉了手动安装和部署的章节，仅保留了Oneinstack下的安装方式，我们能够参考的部分也[基本只有这些](https://wiki.sspanel.org/#/install-using-oneinstack?id=%e9%83%a8%e7%bd%b2-sspanel-uim)了。但本质上，Oneinstack就是个集成度、可定制度更高的LNMP一键安装包。考虑到我们之前已经安装了LNMP，所以这里不需要再安装Oneinstack。
@@ -359,11 +359,20 @@ php xcat Tool createAdmin
 ```
 注意检查后半部分网站目录是否正确，添加好后:wq回车，保存退出即可。
 
+**最后一步非常重要！** 确保自己当前还在sspanel目录下，执行以下命令设置网站文件的权限：
+```
+chmod -R 777 *
+chown -R root *
+```
+官方Wiki中，使用的是755权限和www用户。但实际上，我们在安装LNMP客户端时并没有生成www用户，而且在我的环境下，755权限还是有可能会报502 Bad Gateway，所以干脆偷懒直接使用root账户和777权限。理论上来说，这样设置是十分不安全的，但对于自己身边小规模的使用而言，也无所谓安不安全了。
+
+如果有安全性方面的需求，请自行研究为Nginx、数据库等创建www账户的相关文章，本文不再赘述。
+
 此时执行lnmp restart一次，重启LNMP。如果不报错，你应该就可以正常访问面板主页了。
 
 </details>
 
-#### 2.旧版数据库迁移的方式
+#### 2. 旧版数据库迁移的方式
 <details><summary>点击展开</summary>
 
 对于已经安装了旧版SSPanel-Uim，由于各种原因需要更新的，你的痛苦旅程才刚刚开始。
@@ -371,8 +380,6 @@ php xcat Tool createAdmin
 Dev版的SSPanel一直在更新，而数据库里的表结构也一直在变化。比如user表一直在变化，原来还有的列到了新版就没有了；原来某个值可以为空，更新后变成不能为空了；原来用户密码还能md5加密，现在不行了……虽然官方提供了升级的方式（事实上目前版本的update.sh还是挺好用的，最要命的是以前的手动升级，我几乎就没成功过一次），但有时候版本间隔大了，还是很容易出现升级失败。而这时候，手动导入或直接使用旧版的数据库也必定导致网站崩溃的问题，因此，我们只能手动匹配新版数据库结构。
 
 提醒：本节提到的数据库操作方式属于个人方法，不一定是最优解。有更好办法的同学可以提交issue。
-
-
 
 **2.1 备份旧数据库**
 
@@ -395,7 +402,7 @@ php xcat Tool importAllSettings
 
 要无损迁移老数据库，我们需要使用到“操作-将数据表复制到-仅数据”功能。千万不可以使用“仅结构”或“结构和数据”，否则功亏一篑。手动迁移的原因就是新表的结构变了，所以不能带着结构迁移。
 
-先从简单的开始。我个人只会迁移“announcement（公告）”、“node（节点）”、“product（商品）”和“user（用户）”表，其他均保留默认状态。因为我的面板不设置任何支付网关、审计规则等等，至于优惠码、礼品卡等也可以很方便地重新生成（使用记录对我来说没什么用处）。大家根据自己的情况操作即可，原理都差不多。
+先从简单的开始。我个人只会迁移“announcement（公告）”、“node（节点）”、“product（商品）”和“user（用户）”表，其他均保留默认状态。因为我的面板不设置任何支付网关、审计规则等等，至于优惠码、礼品卡等也可以很方便地重新生成（使用记录对我来说没什么用处）。大家根据自己的情况检查各表内容，按照上述方法操作即可，原理都差不多。
 
 以user表为例，进入旧版数据库的user表，点击“操作”，在“将数据表复制到”一栏中，选择好复制到的新数据库名称，下方点击“仅数据”，然后点击右边的“执行”。如果不出意外，一定会报错，提示“#1054 - Unknown column 'XXX' in 'field list'”。这就证明，旧表的结构中存在的列，新表中已经不存在，因此无法复制。
 
@@ -427,20 +434,105 @@ UPDATE user SET api_token = uuid
 
 目前最新版的SSPanel-Uim已经删除了用户密码的md5加密算法，转为默认使用bycrypt。而bycrypt加密后存储在user表中的密文显然不可能与md5相同。但也正因如此，直接迁移过来的user表会导致登录时提示密码错误。当务之急是解决admin账户无法登录的问题。
 
+此时有两个解决方案，第一种很简单，在数据库中删掉admin账户，然后回到SSH，使用php xcat重建管理员账户：
+```
+php xcat Tool createAdmin
+```
+重建后的管理员账户只需要自己再设置想要的东西即可（比如等级、余额等）。
+
+如果一定要保留原先管理员账户，可以到数据库user表下，将admin账户的ID改为其他数字（也可以连user_name和email一起改了，之后再改回来），然后使用php xcat Tool createAdmin再次创建一个管理员账户。此时数据库中将再次出现一个ID为1的管理员账户，将其pass（登录密码）的值粘贴到原先的Admin账户处，删掉新账户，将旧帐户ID再次改回1。此时就可以正常登录面板，且原先的所有账户数据都能得到保留。
+
+对于其他用户的密码，我们无能为力，只能向用户索要密码，前往面板-站点管理-管理-用户中帮其重置，或在此临时修改为一个统一的简单密码，过后再让用户自行修改。因为md5不可能直接转换为bycrypt，而之前已经使用md5保存的密码也不可能通过在.config.php中修改加密方式来改变，所以只能出此下策。
+
 </details>
 
-#### 3.关于IPv6环境存在的问题
+#### 3. 关于IPv6环境存在的问题
+<details><summary>点击展开</summary>
+
+不知从何时起，我的服务器就再也无法使用IPv6来实现前后端对接了。虽然域名解析没有问题，面板也能识别到IPv6地址的访问记录，但XRayR后端就是无法与前端对接。查看log会发现前端返回了“Invalid request IP”的信息，证明面板程序认为后端的IP地址与前端记录的不一致。而事实上，节点IP自动解析为IPv4的情况可以说从远古时期的版本开始就是如此了，而之前即便解析为IPv4，对接上也不会出现什么问题。但这次就变成了例外。
+
+无奈之下，我只能删除了所有域名的IPv6解析，对应的nginx配置文件也将IPv6的监听端口注释掉：
+```
+server
+    {
+        listen 80;
+        #listen [::]:80;
+        server_name www.example.com ;
+略
+server {
+  listen 443 ssl;
+  #listen [::]:443 ssl;
+```
+重新对接前端，果然成功。
+
+事已至此，就我个人而言，只能认为是前端在IPv6的对接上存在问题了。虽说IPv6在节点访问上并不能带来什么明显优势，但我总认为多一个选择总不是坏事。然而有意思的是，我在试图寻找是否有类似案例时，发现SSPanel-Uim的Issue页面也曾经有人提出过这个问题，无情的是，当人问道是不是只有他遇到这个问题时，开发组的回答只有一句“是的，只有你遇到这个问题”。
+
+嗯，多的不想说什么了，我只能再次感慨，要是wiki和注释上啥都有，我也不会写这篇文章了。
+
+</details>
+
+#### 4. Windows及Android客户端的文件包下载
+<details><summary>点击展开</summary>
+
+如果大家使用的客户端是clash，那么可以直接执行php xcat ClientDownload，这样在面板里就可以直接下载到Clash了。事实上，当前面板的订阅下发风格也在无限向Clash趋近。但我个人并不太喜欢用Clash，而是使用V2Ray和V2RayNG的方案（当然，iOS似乎只有Clash兼容客户端，例如Shadowrocket），因此上述命令并不能完成这项工作，于是我们要手动下载客户端文件包。
+
+前往[V2RayN的Release页面](https://github.com/2dust/v2rayN/releases)，复制“v2rayN-with-Core.zip”的下载链接（此处以6.27版为例），然后回到SSH，进入网站主页所在目录，创建clients文件夹并获取文件包：
+```
+cd /home/wwwroot/sspanel/public
+mkdir clients && cd clients
+wget https://github.com/2dust/v2rayN/releases/download/6.27/v2rayN-With-Core.zip
+```
+此时再前往[V2RayNG的Release页面](https://github.com/2dust/v2rayNG/releases)，复制apk的下载链接（此处以1.8.5_arm64-v8a为例，不带架构后缀的则为32位、64位全兼容版本），并回到SSH中下载：
+```
+wget https://github.com/2dust/v2rayNG/releases/download/1.8.5/v2rayNG_1.8.5_arm64-v8a.apk
+```
+之后修改好客户端文件包的名称：
+```
+mv v2rayN-With-Core.zip v2rayN-Core.zip
+mv v2rayNG_1.8.5_arm64-v8a.apk v2rayNG.apk
+```
+此时回到面板的“传统订阅”处，检查客户端是否能正常下载。如果报错，可以再次为网站目录或这两个文件包设置777权限和root账户，具体参见本节第1点末尾。
+
+</details>
+
+#### 5. Clash及Clash兼容客户端的订阅下发问题
+<details><summary>点击展开</summary>
+
+我反正是不敢再向他们提交issue了，谁爱去谁去吧。
+
+在实践中发现，Clash以及Clash兼容客户端，比如Shadowrocket，会出现订阅内容下发不完整的问题。具体表现为缺少path和host的参数，导致节点连接后无法上网。但是使用Xray或v2fly内核的客户端，比如V2RayN和V2RayNG，都可以获得完整订阅内容。
+
+这个问题似乎是伴随着新版面板产生的，同样的客户端在旧版中可以正常使用。
+
+目前个人没有很好的解决办法，只能引导用户手动填写path和host的内容。另外，如果你的server和host内容一致，不填写host似乎也可以正常访问节点。
+
+</details>
+
+#### 三、部署XrayR后端的要点
+#### 1. 节点信息填写以及Custom-config
+<details><summary>点击展开</summary>
 
 
 
-#### 4.Windows及Android客户端的文件包下载
+</details>
+
+#### 2. XrayR配置文件
+<details><summary>点击展开</summary>
 
 
 
+</details>
 
-<!-- 文内引用链接 -->
-[安装LNMP的要点]: ./README.md#一安装LNMP的要点
-[Nginx可选模块的安装]: ./README.md#1nginx可选模块的安装
-[PHP必要模块的安装]:./README.md#2PHP必要模块的安装
-[PHP已禁用功能的恢复]:./README.md#3PHP已禁用功能的恢复
-[Redis的安装及配置]:./README.md#4Redis的安装及配置
+#### 3. Nginx配置文件
+<details><summary>点击展开</summary>
+
+
+
+</details>
+
+#### 4. 简单分析XrayR log
+<details><summary>点击展开</summary>
+
+
+
+</details>
