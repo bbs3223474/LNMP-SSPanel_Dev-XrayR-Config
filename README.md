@@ -15,6 +15,9 @@ LNMP：https://lnmp.org
 ---
 
 ### 目录：
+
+准备工作
+
 一、安装LNMP的要点
    
    1. Nginx可选模块的安装
@@ -33,10 +36,11 @@ LNMP：https://lnmp.org
 
 三、部署XrayR后端的要点
 
-   1. 节点信息填写以及Custom-config
-   2. XrayR配置文件
-   3. Nginx配置文件
-   4. 简单分析XrayR log
+   1. 下载并安装XrayR
+   2. 节点信息填写以及Custom-config
+   3. XrayR配置文件
+   4. Nginx配置文件
+   5. 启动节点并查看log
 
 四、服务器拥塞算法的选择
 
@@ -46,18 +50,80 @@ LNMP：https://lnmp.org
 
 ---
 
+### 准备工作
+
 首先，我个人推荐使用FinalShell作为SSH工具连接服务器操作。该软件提供了比较完善的图形化界面和直观的文件管理工具，可以让你在不输入命令的情况下轻松编辑文件。详情请访问：https://www.hostbuf.com/
 
 如果你不喜欢FinalShell，也可以自行选择熟悉的SSH客户端进行操作。本教程将部分参照FinalShell的操作方式进行。
 
-本教程将基于RockyOS 8（即CentOS 8的平替版本）进行编写。使用Debian或Ubuntu的同学请自行替换命令内容。
+~~本教程将基于RockyOS 8（即CentOS 8的平替版本）进行编写。使用Debian或Ubuntu的同学请自行替换命令内容。~~ 本教程将基于Ubuntu 20.04/22.04系统进行编写，使用CentOS的同学请自行替换命令内容。由于个人比较喜欢用的Xanmod内核目前仅支持Ubuntu/Debian系统，所以转为使用该系统。实际上Ubuntu和CentOS最主要的区别也就是安装软件包的命令不太一样而已（一个是apt-get，一个是yum），代换不会有太多问题。
 
 全新的VPS在操作前，建议先安装一些基本的工具和依赖：
 ```
-sudo yum -y install git wget vim nano socat
+sudo apt-get install git wget curl vim nano socat
 ```
 
 在后续的内容中，默认你已经获得了系统的root权限，所有操作在root账户下进行。如果没有进入root账户，请自行在命令前添加sudo，或参照附录获得root权限。
+
+#### 更换Xanmod内核 & 更改拥塞算法
+Xanmod内核相比起官方使用的generic内核，执行效率更高，支持更多功能，内核版本也通常保持较新的水平，对于低配VPS和对速度、延迟要求较高的应用场景有不错的改善作用。可惜的是，Xanmod目前只支持Ubuntu/Debian系统，CentOS如果想用，只能手动安装5.x版本，或改用其他内核了。
+
+另外，Xanmod在安装上也没有想象的简单，所以在这里将正确的操作步骤总结。
+
+准备工作：导入GPG Pubkey
+
+在终端中输入以下命令：
+```
+apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 86F7D09EE734E623
+```
+否则过后安装内核时可能会提示“NO_PUBKEY 86F7D09EE734E623”报错，导致内核安装失败，甚至在安装某些软件包时也会有这样的报错。
+
+方案1：使用一键加速脚本（推荐）
+
+使用加速脚本安装内核是比较方便的，它可以帮你安装好所有的依赖，减少出现问题的可能性。另外，后续我们需要修改拥塞（加速）算法时，使用一键脚本也更加简洁直观。
+
+输入以下命令下载加速脚本：
+```
+wget -N --no-check-certificate "https://github.000060000.xyz/tcpx.sh" && chmod +x tcpx.sh && ./tcpx.sh
+```
+之后输入对应数字，安装Xanmod (main)并重启即可。如果自己喜欢别的选择，也可以自行操作。
+
+安装后要注意，在脚本列出的内核列表中是否存在Xanmod，若没有，则安装失败，请参照方案2。
+
+方案2：手动安装
+
+以Xanmod-6.5.8-x64v3版本为例，分别下载内核镜像和headers：
+```
+wget https://zenlayer.dl.sourceforge.net/project/xanmod/releases/main/6.5.8-xanmod1/6.5.8-x64v3-xanmod1/linux-image-6.5.8-x64v3-xanmod1_6.5.8-x64v3-xanmod1-0~20231020.ga323bd9_amd64.deb
+
+wget https://zenlayer.dl.sourceforge.net/project/xanmod/releases/main/6.5.8-xanmod1/6.5.8-x64v3-xanmod1/linux-headers-6.5.8-x64v3-xanmod1_6.5.8-x64v3-xanmod1-0~20231020.ga323bd9_amd64.deb
+```
+然后执行以下命令安装内核：
+```
+dpkg -i linux-image-6.5.8-x64v3-xanmod1_6.5.8-x64v3-xanmod1-0~20231020.ga323bd9_amd64.deb linux-headers-6.5.8-x64v3-xanmod1_6.5.8-x64v3-xanmod1-0~20231020.ga323bd9_amd64.deb
+```
+即“dpkg -i 内核镜像.deb headers.deb”。等待安装完成，重启即可。
+
+如果你需要修改拥塞算法，请下载上述加速脚本，然后选择你想要的组合即可。个人比较喜欢的是BBR+FQ_PIE。不同的加速方案在不同的服务器上的表现也不尽相同（比如BBR2和BBRPlus在我的服务器上表现就很糟糕），因此请自己反复尝试，直到找到最适合自己的方案。
+
+#### 添加虚拟内存
+现在有很多VPS默认不会打开虚拟内存（swap），这样很容易导致在LNMP编译的过程中因内存不足而Error 1报错退出。我们可以输入以下命令检查是否存在swap分区：
+```
+swapon -s
+```
+如果输入命令后出现内容，例如：
+```
+Filename                                Type            Size    Used    Priority
+/var/swapfile                           file            3071996 34208   -2
+```
+才代表已经启用了swap。如果什么都没有，证明没有打开。可以输入以下命令，给系统添加一个大约3GB的虚拟内存：
+```
+dd if=/dev/zero of=/var/swapfile bs=1024 count=3072000 && mkswap /var/swapfile && chmod -R 0600 /var/swapfile && swapon /var/swapfile && echo "/var/swapfile swap swap defaults 0 0" >> /etc/fstab
+```
+这个swap文件在创建后会保留在硬盘上，开机自动激活。如果你不许要了，可以参照[这篇文章](https://blog.csdn.net/ausboyue/article/details/73433990)来删除swap。
+
+至此，前期准备过程已完成。
+
 
 #### 一、安装LNMP的要点
 
@@ -75,7 +141,7 @@ vim lnmp.conf
 ```
 为Nginx_Modules_Options添加“--with-stream_ssl_preread_module”命令。
 
-SSL_Preread模块可用于希望V2Ray和Trojan并存、且不会与Nginx监听端口冲突的情况。但如果你不需要V2Ray和Trojan共存，则不需要进行任何修改。本文也将只会使用V2Ray，具体原因后文解释：
+SSL_Preread模块可用于希望V2Ray和Trojan并存、且不会与Nginx监听端口冲突的情况（有可能提升SSL端口的存活率，但未经验证）。但如果你不需要V2Ray和Trojan共存，可以不进行修改。本文也将只会使用V2Ray，具体原因后文解释：
 ```
 Download_Mirror='https://soft.vpser.net'
 
@@ -85,14 +151,13 @@ PHP_Modules_Options=''
 ```
 保存退出文本编辑器（vim使用英文冒号+wq回车，FinalShell可以直接Ctrl+S保存，以后不再赘述）。
 
-然后编辑include目录下的main.sh，参照本Repo提供的文件，将1GB内存检测的代码注释掉，避免低配置VPS在编译安装MariaDB等时报错：
+然后编辑include目录下的main.sh，参照本Repo提供的文件，将1GB内存检测的代码注释掉，或者直接删除，避免低配置VPS在编译安装MariaDB等时报错：
 ```
-（约第115行）
+（约第291行）
 #    if [ "${Bin}" != "y" ] && [[ "${DBSelect}" =~ ^5|[7-9]|10$ ]] && [ $(free -m | grep Mem | awk '{print  $2}') -le 1024 ]; then
 #        echo "Memory less than 1GB, can't install MySQL 8.0 or MairaDB 10.3+!"
 #        exit 1
 #    fi
-略
 ```
 当然，你也可以直接下载本Repo中的文件对它们直接替换，但个人不推荐这样操作。因为LNMP安装包的版本一直在更新，代码也可能会有细微变化，直接替换可能会导致不可预知的后果。
 
@@ -103,13 +168,14 @@ PHP_Modules_Options=''
 
 根据最新的Dev分支SSPanel-Uim的要求，面板所在服务器的PHP必须要安装并启用以下模块，否则部署过程一定会报错：
 ```
-curl fileinfo gd mbstring xml opcache zip json bz2 bcmath redis
+curl fileinfo gd mbstring xml zend-opcache zip json bz2 bcmath redis
 ```
 以上模块除了Redis以外，PHP源码内都已经包含，可以很轻松地安装并启用。Redis将会单独在后文讲解。具体方法有几种：
 
 **方案1：** 如果你还没有安装LNMP，需要全新安装，则参照上一点修改lnmp.conf，并在PHP_Modules_Options后加入以下内容：
+### UPDATE：目前发现方案1、2似乎并不能在安装过程中编译安装上述模块，暂时建议参照方案3进行操作。
 ```
-PHP_Modules_Options='--enable-curl --enable-fileinfo --enable-gd --enable-mbstring --enable-xml --enable-opcache --enable-zip --enable-zip --enable-json --enable-bz2 --enable-bcmath'
+PHP_Modules_Options='--enable-curl --enable-fileinfo --enable-gd --enable-mbstring --enable-xml --enable-opcache --enable-zip --enable-bz2 --enable-bcmath'
 ```
 保存并退出lnmp.conf。
 
@@ -130,9 +196,9 @@ PHP_Modules_Options='--enable-curl --enable-fileinfo --enable-gd --enable-mbstri
 
 **方案3：** 如果你已经安装了LNMP，且版本号也符合要求，不想重新编译安装一遍的，则需要麻烦一些，手动编译各个模块并添加进PHP中。具体方法如下：
 
-首先进入LNMP一键安装包中PHP源码所在的目录，此处以LNMP 1.9为例：
+首先进入LNMP一键安装包中PHP源码所在的目录，此处以LNMP 2.0为例：
 ```
-cd lnmp1.9/src
+cd lnmp2.0/src
 ls
 ```
 此时查看目录下是否有PHP对应的源代码压缩包，并检查版本号。如果没有压缩包，或版本号不满足要求（PHP 8.0以上），则需要手动下载源码压缩包并解压缩，此处以PHP 8.1.21为例：
@@ -148,7 +214,7 @@ cd curl
 ./configure --with-php-config=/usr/local/php/bin/php-config
 make && make install
 ```
-其余模块就是进入的文件夹名称不同，往后执行的命令全部都相同。
+其余模块就是cd进入的文件夹不同，往后执行的命令全部都相同。 **但请注意，json模块不需要安装，因为PHP已经默认安装和启用了，所以不需要专门编译。**
 
 在除了Redis模块都都安装完毕后，我们需要再对php.ini进行配置，以便让PHP加载这些模块：
 ```
@@ -164,9 +230,18 @@ extension=fileinfo
 extension=gd
 extension=mbstring
 extension=xml
+;extension=json
 略
+
+注意：json模块前面的“;”号不需要去掉，因为json模块已默认启用，在这里去掉注释会让PHP在启动时报错。
 ```
-如果如果发现extension后没有上述安装的模块，你可以手动插入一行并填写好模块名称即可。
+如果如果发现extension后没有上述安装的模块，你可以手动插入一行并按照格式填写好模块名称即可。
+
+对于opcache模块，由于它属于zend的模块，所以要在稍微下面一点的地方找到这行代码并去掉“;”号：
+```
+zend_extension=opcache
+```
+重启LNMP，若没有报错（“PHP message: PHP Warning:  Module "xxx" is already loaded in Unknown on line 0”的报错可以不用管，不影响正常启动，它的意思似乎是我们并不需要改上面的php.ini就可以加载模块了。但保险起见我还是多做一步），则证明模块已经安装成功。你可以在浏览器里访问你的服务器IP，点击phpinfo来查看对应模块是否已经加载。
 
 </details>
 
@@ -189,13 +264,16 @@ disable_functions = passthru,system,chroot,chgrp,chown,ini_alter,ini_restore,dl,
 
 新版SSPanel-Uim需要依赖Redis实现订阅下发、用户资料编辑（非管理员界面）等功能。如果不安装，在访问部分面板页面时会报HTTP 500错误。开启面板debug模式后会发现诸如“Could not connect to Redis at 127.0.0.1:6379: Connection refused”的提示。可惜的是，在SSPanel-Uim的Wiki中并没有提到这点，似乎他们是按照稳定版的内容去写的wiki，甚至连手动在CentOS中安装的章节都删掉了。
 
-Redis默认不包含在PHP的源码中，需要手动下载并解压。这里选择下载到LNMP安装包的PHP源码目录内：
+Redis默认不包含在PHP的源码中，需要手动下载并解压。这里选择下载到LNMP安装包的PHP源码（以8.1.21版本为例）目录内：
 ```
-cd lnmp1.9/src/php-8.1.21/ext
+cd lnmp2.0/src/php-8.1.21/ext
 wget https://pecl.php.net/get/redis-5.3.7.tgz && tar -zxvf redis-5.3.7.tgz && cd redis-5.3.7
 ```
-参照第2点的方法，编译并安装redis模块。安装完成后，为php.ini添加extension：
+如果有其他想下载的版本，请自行修改命令中的版本号，以下不再赘述。
+
+参照第2点的方法，编译并安装redis模块。安装完成后，在php.ini的Dynamic Extensions一节添加：
 ```
+（约第929行）
 extension=/usr/local/php/lib/php/extensions/no-debug-non-zts-20210902/redis.so
 ```
 在实践过程中，我发现直接使用“extension=redis”并不能让PHP调用redis模块，因此在此采用了精确位置进行调用。注意：“no-debug-non-zts-20210902”这个目录名称可能会根据你的PHP版本发生改变，请在Redis模块编译并安装完成后留意结尾的信息，如果有不同的需要进行替换。
@@ -209,8 +287,8 @@ sysctl vm.overcommit_memory=1
 此时先不急着make，因为Redis在后续的make test中，会提示需要Python3，所以首先需要安装（已安装的可以跳过）：
 ```
 wget https://www.python.org/ftp/python/3.11.4/Python-3.11.4.tgz && tar -zxvf Python-3.11.4.tgz && cd Python-3.11.4.tgz
-yum install -y zlib*
-yum -y install zlib-devel bzip2-devel openssl-devel ncurses-devel sqlite-devel readline-devel tk-devel gdbm-devel db4-devel libpcap-devel xz-devel
+apt-get install zlib*
+apt-get install zlib-devel bzip2-devel openssl-devel ncurses-devel sqlite-devel readline-devel tk-devel gdbm-devel db4-devel libpcap-devel xz-devel
 ```
 这里插一嘴，上述yum install的依赖也是我复制来的，不知道具体作用，也不清楚有哪些还确实存在。实践过程发现部分包是没法安装的，但似乎没有影响Python3的安装使用，所以报错就让它报错吧。
 ```
@@ -509,30 +587,199 @@ mv v2rayNG_1.8.5_arm64-v8a.apk v2rayNG.apk
 </details>
 
 #### 三、部署XrayR后端的要点
-#### 1. 节点信息填写以及Custom-config
+
+#### 1. 下载并安装XrayR
+
+执行以下命令，安装XrayR最新版：
+```
+wget -N https://raw.githubusercontent.com/XrayR-project/XrayR-release/master/install.sh && bash install.sh
+```
+
+#### 2. 节点信息填写以及Custom-config
 <details><summary>点击展开</summary>
 
+首先在域名提供商处设置好域名和解析，待生效后，使用lnmp vhost add添加一个网站并设置好SSL认证，过程不再赘述。
 
+完成后，在SSPanel中添加一个节点，填好域名、流量、等级等信息，然后在Custom-config处填写以下代码，对应websocket+tls模式：
+```
+{
+  "offset_port_node": "10086",
+  "offset_port_user": "443",
+  "server_sub": "www.example.com",
+  "host": "www.example.com",
+  "alter_id": "0",
+  "network": "ws",
+  "security": "tls",
+  "path": "/welcome/"
+}
+```
+注意，上下两个“{}”符号已经默认存在，所以不需要复制进去。如果你熟悉Vless、Xtls等，请自行修改，本文不做讲解。
+
+其中，port_node为nginx识别到websocket协议后转发给XRayR的端口，也就是XRayR监听的端口。port_user为用户连接到节点时访问的SSL端口（默认为443），server_sub和host一般是相同的，即后端所在服务器的域名。如果你的host不一样，估计你也不需要研究这部分内容了。path是等会儿Nginx配置文件中涉及的内容，可以修改，具体见后文。
+
+编辑好节点信息后，保存节点即可。回到上一页，记住这个节点的ID。
 
 </details>
 
-#### 2. XrayR配置文件
+#### 3. XrayR配置文件
 <details><summary>点击展开</summary>
 
+本Repo的“XrayR_config.yml”即本人使用的配置文件模板，将里面的内容直接覆盖掉/etc/XrayR/config.yml中的代码即可，原文件的内容不需要保留。当然，如果你熟悉配置文件的内容，也可以根据自己的需要进行修改。
 
+覆盖好代码后，修改必要的内容即可。通常只需要修改以下内容：
+```
+ApiHost: "https://www.example.com" #SSPanel面板的网址
+       ApiKey: "muKey" #字面意思，你给面板设置的mukey。注意不能使用节点API Key，否则无法对接
+       NodeID: 1 #节点ID，把刚才新增节点的ID抄写过来
+```
 
 </details>
 
-#### 3. Nginx配置文件
+#### 4. Nginx配置文件
 <details><summary>点击展开</summary>
 
+此处有两个步骤。
 
+**可选：如果安装了SSL Preread模块**
+
+此时你可以在nginx.conf中添加stream节来实现同个SSL端口到不同监听端口的分流，也就是V2Ray和Trojan共存。当然你不需要共存也可以进行这步，个人体感是提升了SSL端口的存活率，不容易被封，但实际效果未经验证。
+
+编辑/usr/local/nginx/conf/nginx.conf文件，在events节之后、http节之前添加内容，最终的效果大致如下：
+```
+events
+    {
+        use epoll;
+        worker_connections 51200;
+        multi_accept off;
+        accept_mutex off;
+    }
+
+stream {
+    # map domain to different name
+    map $ssl_preread_server_name $backend_name {
+    #   www.example.com web;
+        v2r.example.com vmess;
+    #    trj.example.com trojan;
+    # default value for not matching any of above
+        default trojan;
+    }
+
+#   upstream web {
+#       server 127.0.0.1:1442;
+#   }
+
+#    upstream trojan {
+#        server 127.0.0.1:1443;
+#    }
+
+    upstream vmess {
+        server 127.0.0.1:1444;
+    }
+
+    server {
+        listen 443 reuseport;
+        #listen [::]:443 reuseport;
+        proxy_pass  $backend_name;
+        ssl_preread on;
+    }
+}
+
+http
+    {
+        include       mime.types;
+        default_type  application/octet-stream;
+略
+```
+其中，“v2r.example.com vmess”为“Xray后端使用的域名 转发到的名字”，请首先修改域名。名字对应下方的“upstream vmess”。因此“vmess”等名字你也可以自行修改。listen 443即SSL端口，在不需要跑网站的服务器上，个人建议将它修改成别的端口。注意修改后节点的Custom-config中的port_user需要一并修改。
+
+当然，就算你修改了，也不会影响未经此处转发的网站。例如：在此处设置了一个SSL端口为1443，而你又用lnmp vhost add添加了另一个网站并设置SSL，也没有在这里设置stream转发，那么该网站不会受到这边1443端口的影响，依旧按照网站配置文件中的SSL端口（默认443）进行监听。
+
+**必须：修改网站配置文件**
+
+如果你确实不需要做端口转发，则可以直接按照以下内容修改网站配置文件。
+
+假设你的XrayR使用域名为v2r.example.com，则编辑/usr/local/nginx/conf/vhost/v2r.example.com.conf中的内容。将第二个server节（即SSL相关）的内容全部删除，并参照如下内容增加新的server节：
+```
+server {
+  listen 443 ssl; #做了stream转发的，跟nginx.conf中upstream设置的端口号一致。若没有做，则这是SSL端口号。
+  #listen [::]:443 ssl;
+  ssl_certificate       /usr/local/nginx/conf/ssl/v2r.example.com/fullchain.cer; #修改成自己的域名，下同。
+  ssl_certificate_key   /usr/local/nginx/conf/ssl/v2r.example.com/v2r.example.com.key;
+  ssl_session_timeout 1d;
+  ssl_session_cache shared:MozSSL:10m;
+  ssl_session_tickets off;
+  
+  ssl_protocols         TLSv1.2 TLSv1.3;
+  ssl_ciphers           ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+  ssl_prefer_server_ciphers off;
+  
+  server_name           v2r.example.com;
+  location /welcome/ { #即节点Custom-config中设置的path，可以修改，确保两边完全一致。
+    if ($http_upgrade != "websocket") {
+        return 404;
+    }
+    proxy_redirect off;
+    proxy_pass http://127.0.0.1:10086; #即转发给XrayR的端口，对应Custom-config中的port_node。
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    # Show real IP in v2ray access.log
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+}
+```
+你也可以直接使用本Repo中提供的v2r.example.com.conf中的内容直接覆盖掉原网站配置文件，并修改好相应信息。
+
+修改好后，使用lnmp restart重启LNMP，若没有报错，则修改成功。
 
 </details>
 
-#### 4. 简单分析XrayR log
+#### 4. 启动节点并查看log
 <details><summary>点击展开</summary>
 
+命令行中输入xrayr，打开XrayR主程序，出现如下菜单：
+```
+  XrayR 后端管理脚本，不适用于docker
+--- https://github.com/XrayR-project/XrayR ---
+  0. 修改配置
+————————————————
+  1. 安装 XrayR
+  2. 更新 XrayR
+  3. 卸载 XrayR
+————————————————
+  4. 启动 XrayR
+  5. 停止 XrayR
+  6. 重启 XrayR
+  7. 查看 XrayR 状态
+  8. 查看 XrayR 日志
+————————————————
+  9. 设置 XrayR 开机自启
+ 10. 取消 XrayR 开机自启
+————————————————
+ 11. 一键安装 bbr (最新内核)
+ 12. 查看 XrayR 版本 
+ 13. 升级维护脚本
+ 
+XrayR状态: 未运行
+是否开机自启: 是
 
+请输入选择 [0-13]: 
+```
+输入6回车，若之前的设置全部正确，则重启成功。回到主界面，输入8回车，或在终端中输入xrayr log查看日志。
+
+正常情况下，你应该看到类似这样的消息：
+```
+XrayR 0.9.1 (A Xray backend that supports many panels)
+2023/10/22 01:33:15 Start the panel..
+2023/10/22 01:33:15 Xray Core Version: 1.8.4
+2023/10/22 01:33:15 [Warning] core: Xray 1.8.4 started
+2023/10/22 01:33:15 [https://panel.example.com] V2ray(ID=1) Added 10 new users
+2023/10/22 01:33:15 [https://panel.example.com] V2ray(ID=1) Start node monitor periodic task
+2023/10/22 01:33:15 [https://panel.example.com] V2ray(ID=1) Start user monitor periodic task
+2023/10/22 01:33:15 [https://panel.example.com] V2ray(ID=1) Start cert monitor periodic task
+```
+只要有“Added xx new users”则证明面板中符合本节点条件的用户已经被对接到XrayR后端中，可以正常访问节点。如果出现“Invalid Argument”之类的报错，重点检查XrayR配置文件中的mukey是否正确、面板网址是否正确，“SSpanel”、“V2ray”之类的大小写是否正确（配置文件里有范例，必须严格按照范例的大小写）。
 
 </details>
