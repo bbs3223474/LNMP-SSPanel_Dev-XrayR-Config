@@ -658,7 +658,7 @@ ApiHost: "https://www.example.com" #SSPanel面板的网址
 
 **可选：如果安装了SSL Preread模块**
 
-此时你可以在nginx.conf中添加stream节来实现同个SSL端口到不同监听端口的分流，也就是V2Ray和Trojan客户端共存（尤其是像soga这样的后端，如果不进行此操作的话，其默认就会监听）。当然你不需要共存也可以进行这步，个人体感是提升了SSL端口的存活率，不容易被封，但实际效果未经验证。
+此时你可以在nginx.conf中添加stream节来实现同个SSL端口到不同监听端口的分流，也就是V2Ray和Trojan客户端共存（尤其是像soga这样的后端，如果不进行此操作的话，其默认就会监听443端口，并与nginx冲突）。当然你不需要共存也可以进行这步，个人体感是提升了SSL端口的存活率，不容易被封，但实际效果未经验证。
 
 编辑/usr/local/nginx/conf/nginx.conf文件，在events节之后、http节之前添加内容，最终的效果大致如下：
 ```
