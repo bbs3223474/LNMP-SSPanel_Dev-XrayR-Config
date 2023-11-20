@@ -1,4 +1,4 @@
- # 在LNMP下部署最新SSPanel_Dev并与XrayR后端对接的教程（截至2023年7月）
+ # 在LNMP下部署最新SSPanel_Dev并与XrayR后端对接的教程（截至2023年11月）
 ---
 ### 前言：
 ### 过去的一年时间，基于SSPanel搭建的飞机场发生了翻天覆地的变化。首先SSPanel完全更换了框架，界面大改，然后V2Ray-Poseidon作者删库跑路，留下我独自在风中凌乱。再加上特定时期总会有那么一批SSL端口甚至服务器IP被毙掉、SSPanel的Wiki其实相当笼统，作者团队也相当高傲（个人觉得差不多相当于“有问题那都是你不会用”）、面板所需要的依赖，以及依赖的依赖总会有所变化、面板对应的数据库结构也总在变化……总之直到憋出这篇个人认为可以分享的经验为止，并不是什么愉快、舒适的过程。但无论如何，这篇Readme还是憋出来了。作为一名学英语的文科生，我会用我可怜的知识储备，尽量将这一路过来的酸甜苦辣给大家分享透彻。当然了，本文所提到的各种解决方案、代码等等，也并非100%按照官方说明和规范进行。有经验的同学可以在我的基础上自行研究更好的内容，而像我一样只会复制粘贴的同学，本文也应该能确保你的项目可以正常跑起来了。
@@ -76,7 +76,7 @@ Xanmod内核相比起官方使用的generic内核，执行效率更高，支持�
 ```
 apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 86F7D09EE734E623
 ```
-否则过后安装内核时可能会提示“NO_PUBKEY 86F7D09EE734E623”报错，导致内核安装失败，甚至在安装某些软件包时也会有这样的报错。
+否则过后安装内核时会提示“NO_PUBKEY 86F7D09EE734E623”报错，导致内核安装失败，甚至在安装某些软件包时也会有这样的报错。
 
 方案1：使用一键加速脚本（推荐）
 
@@ -120,7 +120,7 @@ Filename                                Type            Size    Used    Priority
 ```
 dd if=/dev/zero of=/var/swapfile bs=1024 count=3072000 && mkswap /var/swapfile && chmod -R 0600 /var/swapfile && swapon /var/swapfile && echo "/var/swapfile swap swap defaults 0 0" >> /etc/fstab
 ```
-这个swap文件在创建后会保留在硬盘上，开机自动激活。如果你不许要了，可以参照[这篇文章](https://blog.csdn.net/ausboyue/article/details/73433990)来删除swap。
+这个swap文件在创建后会保留在硬盘上，开机自动激活。如果你不需要了，可以参照[这篇文章](https://blog.csdn.net/ausboyue/article/details/73433990)来删除swap。
 
 至此，前期准备过程已完成。
 
@@ -168,12 +168,14 @@ PHP_Modules_Options=''
 
 根据最新的Dev分支SSPanel-Uim的要求，面板所在服务器的PHP必须要安装并启用以下模块，否则部署过程一定会报错：
 ```
-curl fileinfo gd mbstring xml zend-opcache zip json bz2 bcmath redis
+curl fileinfo gd mbstring xml zend-opcache zip json bz2 bcmath sodium yaml redis
 ```
-以上模块除了Redis以外，PHP源码内都已经包含，可以很轻松地安装并启用。Redis将会单独在后文讲解。具体方法有几种：
+以上模块除了Redis以外，PHP源码内都已经包含，可以很轻松地安装并启用。此外，新版的PHP已经启用了上面大多数模块，如curl、xml、json、zip等等，具体可以在安装好LNMP后，访问服务器IP并点击phpinfo，或使用php -m来查看哪些模块已经启用。已经启用好的模块就不再需要安装了。
+
+Redis将会单独在后文讲解。具体方法有几种：
 
 **方案1：** 如果你还没有安装LNMP，需要全新安装，则参照上一点修改lnmp.conf，并在PHP_Modules_Options后加入以下内容：
-### UPDATE：目前发现方案1、2似乎并不能在安装过程中编译安装上述模块，暂时建议参照方案3进行操作。
+### UPDATE：目前发现方案1、2似乎并不能在安装过程中编译安装上述模块（是我没研究明白），暂时建议参照方案3进行操作。
 ```
 PHP_Modules_Options='--enable-curl --enable-fileinfo --enable-gd --enable-mbstring --enable-xml --enable-opcache --enable-zip --enable-bz2 --enable-bcmath'
 ```
@@ -184,7 +186,7 @@ PHP_Modules_Options='--enable-curl --enable-fileinfo --enable-gd --enable-mbstri
 ```
 ./install.sh lnmp
 ```
-安装时，PHP选择8.1或8.2，MariaDB选择10.11，数据库密码自行设定，其余保持默认，直接开始编译安装即可。作为参考，目前个人使用MariaDB 10.11.2和PHP 8.1.18的组合。
+安装时，PHP选择8.1或8.2，MariaDB选择10.11，数据库密码自行设定，其余保持默认，直接开始编译安装即可。作为参考，目前个人使用MariaDB 10.11.2和PHP 8.2.6的组合。
 
 **方案2：** 如果你已经安装了LNMP，但版本号不符合要求（SSPanel-Uim要求PHP 8.x以上，以及MariaDB 10.3以上），则必须要进行更新，否则部署面板和数据库时一定会报错。此时我们可以顺手添加好PHP的模块。
 
@@ -201,11 +203,11 @@ PHP_Modules_Options='--enable-curl --enable-fileinfo --enable-gd --enable-mbstri
 cd lnmp2.0/src
 ls
 ```
-此时查看目录下是否有PHP对应的源代码压缩包，并检查版本号。如果没有压缩包，或版本号不满足要求（PHP 8.0以上），则需要手动下载源码压缩包并解压缩，此处以PHP 8.1.21为例：
+此时查看目录下是否有PHP对应的源代码压缩包，并检查版本号。如果没有压缩包，或版本号不满足要求（PHP 8.0以上），则需要手动下载源码压缩包并解压缩，此处以PHP 8.2.6为例：
 ```
-wget https://www.php.net/distributions/php-8.1.21.tar.gz
-tar -zxvf php-8.1.21.tar.gz
-cd php-8.1.21/ext
+wget https://www.php.net/distributions/php-8.2.6.tar.gz
+tar -zxvf php-8.2.6.tar.gz
+cd php-8.2.6/ext
 ```
 分别进入前文对应的模块文件夹，并执行以下命令，此处以curl为例：
 ```
@@ -214,34 +216,63 @@ cd curl
 ./configure --with-php-config=/usr/local/php/bin/php-config
 make && make install
 ```
-其余模块就是cd进入的文件夹不同，往后执行的命令全部都相同。 **但请注意，json模块不需要安装，因为PHP已经默认安装和启用了，所以不需要专门编译。**
+其余模块就是cd进入的文件夹不同，往后执行的命令全部都相同。 **请再次注意PHP默认已经安装和启用的模块，避免重复安装。**
+
+**特别提醒：yaml模块默认不包含在PHP安装包里，需要手动下载源码后编译安装，并且编译扩展之前，需要首先在系统中安装yaml程序包：**
+```
+wget https://pyyaml.org/download/libyaml/yaml-0.2.5.tar.gz
+tar -zxvf yaml-0.2.5.tar.gz
+cd yaml-0.2.5
+./configure
+make && make install
+```
+
+然后再下载和安装PHP的yaml模块：
+```
+wget https://pecl.php.net/get/yaml-2.2.3.tgz
+tar -zxvf yaml-2.2.3.tgz
+cd yaml-2.2.3
+/usr/local/php/bin/phpize
+./configure --with-php-config=/usr/local/php/bin/php-config
+make && make install
+```
+**特别提醒2：安装sodium模块之前，必须先安装libsodium程序包：**
+```
+wget https://download.libsodium.org/libsodium/releases/libsodium-1.0.19.tar.gz
+tar -xvzf libsodium-1.0.19.tar.gz
+cd libsodium-stable
+./configure
+make && make install
+```
+之后再进入ext/sodium目录安装sodium模块。
 
 在除了Redis模块都都安装完毕后，我们需要再对php.ini进行配置，以便让PHP加载这些模块：
 ```
 vim /usr/local/php/etc/php.ini
 ```
-找到Dynamic Extensions一节，将指定模块前的“;”号去掉，例如：
+找到Dynamic Extensions一节，将**刚才手动安装的模块**前的“;”号去掉，已默认安装开启的模块不用动，例如：
 ```
 （约第929行）
-extension=curl
+;extension=curl
 ;extension=ffi
 ;extension=ftp
 extension=fileinfo
-extension=gd
+;extension=gd
 extension=mbstring
-extension=xml
+;extension=xml
 ;extension=json
 略
-
-注意：json模块前面的“;”号不需要去掉，因为json模块已默认启用，在这里去掉注释会让PHP在启动时报错。
 ```
+sodium模块在稍微下面一点有写，直接去掉“;”即可。
+
 如果如果发现extension后没有上述安装的模块，你可以手动插入一行并按照格式填写好模块名称即可。
 
 对于opcache模块，由于它属于zend的模块，所以要在稍微下面一点的地方找到这行代码并去掉“;”号：
 ```
 zend_extension=opcache
 ```
-重启LNMP，若没有报错（“PHP message: PHP Warning:  Module "xxx" is already loaded in Unknown on line 0”的报错可以不用管，不影响正常启动，它的意思似乎是我们并不需要改上面的php.ini就可以加载模块了。但保险起见我还是多做一步），则证明模块已经安装成功。你可以在浏览器里访问你的服务器IP，点击phpinfo来查看对应模块是否已经加载。
+重启LNMP，若没有报错（“PHP message: PHP Warning:  Module "xxx" is already loaded in Unknown on line 0”的报错可以不用管，不影响正常启动，它的意思是模块已经默认加载，不用再手动改php.ini了。介意的话可以按照提示将“;”号加回去。），则证明模块已经安装成功。
+
 
 </details>
 
@@ -262,11 +293,13 @@ disable_functions = passthru,system,chroot,chgrp,chown,ini_alter,ini_restore,dl,
 #### 4. Redis的安装及配置
 <details><summary>点击展开</summary>
 
-新版SSPanel-Uim需要依赖Redis实现订阅下发、用户资料编辑（非管理员界面）等功能。如果不安装，在访问部分面板页面时会报HTTP 500错误。开启面板debug模式后会发现诸如“Could not connect to Redis at 127.0.0.1:6379: Connection refused”的提示。可惜的是，在SSPanel-Uim的Wiki中并没有提到这点，似乎他们是按照稳定版的内容去写的wiki，甚至连手动在CentOS中安装的章节都删掉了。
+新版SSPanel-Uim需要依赖Redis实现订阅下发、用户资料编辑（非管理员界面）等大多数功能。如果不安装，在访问部分面板页面时会报HTTP 500错误。开启面板debug模式后会发现诸如“Could not connect to Redis at 127.0.0.1:6379: Connection refused”的提示。
 
-Redis默认不包含在PHP的源码中，需要手动下载并解压。这里选择下载到LNMP安装包的PHP源码（以8.1.21版本为例）目录内：
+而官方Wiki中，只提及了安装Redis-server程序包，却并未提到要安装PHP模块。如果不进行安装，在部署面板时执行php composer.phar install时会报错，提示redis模块不存在。所以我们需要先手动安装PHP模块，再安装Redis-server。
+
+Redis默认不包含在PHP的源码中，需要手动下载并解压。这里选择下载到LNMP安装包的PHP源码（以8.2.6版本为例）目录内：
 ```
-cd lnmp2.0/src/php-8.1.21/ext
+cd lnmp2.0/src/php-8.2.6/ext
 wget https://pecl.php.net/get/redis-5.3.7.tgz && tar -zxvf redis-5.3.7.tgz && cd redis-5.3.7
 ```
 如果有其他想下载的版本，请自行修改命令中的版本号，以下不再赘述。
@@ -274,95 +307,42 @@ wget https://pecl.php.net/get/redis-5.3.7.tgz && tar -zxvf redis-5.3.7.tgz && cd
 参照第2点的方法，编译并安装redis模块。安装完成后，在php.ini的Dynamic Extensions一节添加：
 ```
 （约第929行）
-extension=/usr/local/php/lib/php/extensions/no-debug-non-zts-20210902/redis.so
+extension=/usr/local/php/lib/php/extensions/no-debug-non-zts-20220829/redis.so
 ```
-在实践过程中，我发现直接使用“extension=redis”并不能让PHP调用redis模块，因此在此采用了精确位置进行调用。注意：“no-debug-non-zts-20210902”这个目录名称可能会根据你的PHP版本发生改变，请在Redis模块编译并安装完成后留意结尾的信息，如果有不同的需要进行替换。
+在实践过程中，我发现直接使用“extension=redis”并不能让PHP调用redis模块，因此在此采用了精确位置进行调用。注意：“no-debug-non-zts-20220829”这个目录名称可能会根据你的PHP版本发生改变，请在Redis模块编译并安装完成后留意结尾的信息，如果有不同的需要进行替换。
 
-PHP模块安装完成后，我们还需要单独安装Redis-server程序。实践中发现，基于源码安装的Redis-server似乎找不到安装的位置，但命令行可以执行，因此解压到的目录请自行抉择，这里依旧以/root目录为例：
-```
-cd ~
-wget http://download.redis.io/releases/redis-7.2-rc3.tar.gz && tar -zxvf redis-7.2-rc3.tar.gz
-sysctl vm.overcommit_memory=1
-```
-此时先不急着make，因为Redis在后续的make test中，会提示需要Python3，所以首先需要安装（已安装的可以跳过）：
-```
-wget https://www.python.org/ftp/python/3.11.4/Python-3.11.4.tgz && tar -zxvf Python-3.11.4.tgz && cd Python-3.11.4.tgz
-apt-get install zlib*
-apt-get install zlib-devel bzip2-devel openssl-devel ncurses-devel sqlite-devel readline-devel tk-devel gdbm-devel db4-devel libpcap-devel xz-devel
-```
-这里插一嘴，上述yum install的依赖也是我复制来的，不知道具体作用，也不清楚有哪些还确实存在。实践过程发现部分包是没法安装的，但似乎没有影响Python3的安装使用，所以报错就让它报错吧。
-```
-./configure --prefix=/usr/local/python3 --with-ssl
-make && make install
-```
-在安装结束后，创建软链接：
-```
-ln -s /usr/local/python3/bin/python3 /usr/bin/python3
-ln -s /usr/local/python3/bin/pip3 /usr/bin/pip3
-```
-安装好Python3后，回到刚才的Redis源码目录，并准备好编译安装：
-```
-cd ~/redis-7.2-rc3
-make
-make test
-make install
-```
-其中，三个make需要分别执行，至于make test做不做自行决定，这里Redis在make完成后会提示强烈推荐你make test，所以也就顺带进行了。make test过程比较久，中途还会报一些错误，这里暂时不用管，最后make install成功即可。
+PHP模块安装完成后，我们还需要单独安装Redis-server程序。
 
-安装完成后，留在原地，修改redis.conf，修改以下几处地方：
+首先向系统中导入GPG Pubkey：
 ```
-（约第108行）
-# By default protected mode is enabled. You should disable it only if
-# you are sure you want clients from other hosts to connect to Redis
-# even if no authentication is configured.
-protected-mode no
-略
-（约第413行）
-# Set the local environment which is used for string comparison operations, and 
-# also affect the performance of Lua scripts. Empty String indicates the locale 
-# is derived from the environment variables.
-locale-collate "en_US.UTF-8"
-略
-（约第577行）
-# Note: read only replicas are not designed to be exposed to untrusted clients
-# on the internet. It's just a protection layer against misuse of the instance.
-# Still a read only replica exports by default all the administrative commands
-# such as CONFIG, DEBUG, and so forth. To a limited extent you can improve
-# security of read only replicas using 'rename-command' to shadow all the
-# administrative / dangerous commands.
-replica-read-only no
+curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
 ```
-其中，protected-mode和replica-read-only要设置成no，以避免后续出现“You can't write against a read only replica”的错误（非debug模式下会HTTP 500）。locale-collate指定好语言和编码，避免启动redis-server时出现“redisFailed to configure LOCALE for invalid locale name”的报错（这也是之前make test时通常会出现的问题）。
-
-保存并退出redis.conf，执行以下命令启动Redis：
+写入Redis官方源：
 ```
-redis-server /root/redis-7.2-rc3/redis.conf
+echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
 ```
-如果正确出现Redis的logo和其他信息，则证明Redis服务器端正常启动。但此时Redis程序会保持前台运行，如果Ctrl+C的话会直接终止进程。所以我们还要回到redis.conf中配置后台运行：
+更新APT缓存，安装Redis-server并设置开机启动：
 ```
-（约第306行）
-# By default Redis does not run as a daemon. Use 'yes' if you need it.
-# Note that Redis will write a pid file in /var/run/redis.pid when daemonized.
-# When Redis is supervised by upstart or systemd, this parameter has no impact.
-daemonize yes
-略
+apt-get update
+apt-get install redis
+systemctl start redis-server
+systemctl enable redis-server
 ```
-保存退出后再次执行上述命令运行Redis，此时不应有任何提示，但Redis应该正常运行在后台了。我们可以通过以下命令来简单验证：
+安装完成后，输入以下命令打开Redis-server程序：
 ```
 redis-cli
 ```
-如果正常出现“127.0.0.1:6379>”的命令行，则证明Redis启动成功，此时可以输入role来顺便查看保护模式是否已关闭：
+如果正常出现“127.0.0.1:6379>”的命令行，则证明Redis启动成功，此时可以输入role来顺便查看当前角色：
 ```
 127.0.0.1:6379> role
 1) "master"
-2) "192.168.40.37"
-3) (integer) 8886
-4) "connecting"
-5) (integer) -1
+2) (integer) 0
+3) (empty array)
+127.0.0.1:6379> exit
 ```
-理论上说，在关闭保护模式后role会从slave（从）变成master（主），但在实践中发现，它似乎还是会自动变回slave。但鉴于之前已经配置了相应的内容，只要后续SSPanel-Uim不出现HTTP 500报错（验证方式：登录后不进入管理后台，点击“我的-资料修改”，查看页面是否正常显示），订阅下发也正常，则可以正常使用。
+理论上说，全新安装的Redis-server角色默认就是“master”。如果出现“slave”，则有可能导致网站运行不正常。但只要不出现HTTP 500报错（验证方式：登录后不进入管理后台，点击“我的-资料修改”，查看页面是否正常显示），订阅下发也正常，则可以正常使用。
 
-如果一定需要改变，[请参照此文章](https://blog.csdn.net/huojiahui22/article/details/122448293)来解决slave的问题。注意：文章中命令行内的IP地址根据你自己输入role后得出的IP地址进行修改，比如我这里的192.168.40.37，端口号6379不变。
+如果一定需要改变，或是确实存在问题，[请参照此文章](https://blog.csdn.net/huojiahui22/article/details/122448293)来解决。
 
 </details>
 
@@ -370,8 +350,6 @@ redis-cli
 
 #### 1. 个人的一些有区别的代码
 <details><summary>点击展开</summary>
-
-由于SSPanel-Uim的Wiki已经删掉了手动安装和部署的章节，仅保留了Oneinstack下的安装方式，我们能够参考的部分也[基本只有这些](https://wiki.sspanel.org/#/install-using-oneinstack?id=%e9%83%a8%e7%bd%b2-sspanel-uim)了。但本质上，Oneinstack就是个集成度、可定制度更高的LNMP一键安装包。考虑到我们之前已经安装了LNMP，所以这里不需要再安装Oneinstack。
 
 首先，假设你已经拥有域名，并设置好解析，那么就可以使用lnmp vhost add命令添加一个Nginx主机了。具体内容不再赘述，确保创建一个数据库（本文名称将以sspanel为例），是否申请证书自行决定。添加好vhost后，我们可以先行修改网站对应的nginx配置文件，添加好伪静态。
 
@@ -391,7 +369,7 @@ redis-cli
             fastcgi_param PATH_INFO $fastcgi_path_info;
         }
 ```
-其中，try_files是一直以来必须要有的伪静态，而fastcgi这一段我并不清楚具体用途，它只在之前的某一版Wiki中出现，但也没有进行解释（而且按照当时他们的代码范例，直接跑起来是会报错的）。当前版本Wiki已经删掉了这部分代码，而我的面板是之前就已经部署好了的，所以进行了保留，似乎也没有产生不良影响。如果你怀疑fastcgi这部分的作用，可以不去添加它。
+其中，try_files是一直以来必须要有的伪静态，而fastcgi这一段我并不清楚具体用途，wiki也没有进行解释（而且按照他们的代码范例，直接跑起来是会报错的，必须要把pass改成如上的IP地址+端口号才行）。如果你怀疑fastcgi这部分的作用，可以不去添加它。
 
 此外要记住，上述代码需要添加两次，一次放在监听80端口的节下面，一次放在443端口的节下面，此处不再赘述。
 
@@ -401,20 +379,27 @@ root /home/wwwroot/sspanel/public;
 ```
 同样注意80和443两节的都要修改。
 
-接下来，在部署网站之前，我们一定要移除LNMP默认的跨目录访问限制，否则浏览器一定会提示502 Bad Gateway。这里你可以使用LNMP安装包tools目录下的remove_open_basedir_restriction.sh，也可以直接手动操作：
+**警告：手动修改网站根目录将会导致LNMP提供的acme.sh证书自动续期失效，并且后续手动续期证书也会报404错误。在续期之前，请先将root中的“/public”去掉。个人不建议在lnmp vhost add时直接设置到public目录下，似乎会造成一些奇怪的故障。**
+
+接下来，在部署网站之前，我们一定要移除LNMP默认的跨目录访问限制，否则浏览器一定会提示502 Bad Gateway。这里你可以使用LNMP安装包tools目录下的remove_open_basedir_restriction.sh（强烈推荐），也可以直接手动操作：
 ```
 cd /home/wwwroot/sspanel
 chattr -i .user.ini
-rm -y .user.ini
+rm .user.ini
+sed -i 's/^fastcgi_param PHP_ADMIN_VALUE/#fastcgi_param PHP_ADMIN_VALUE/g' /usr/local/nginx/conf/fastcgi.conf
 ```
+注：上述sed -i命令只需要最开始执行一次，以后创建其他网站只需要删除.user.ini即可，不需要再执行sed -i命令。
+
+执行完毕后重启一次LNMP或PHP。
+
 之后我们就可以参考Wiki内容直接部署网站了：
 ```
 git clone -b dev https://github.com/Anankke/SSPanel-Uim.git .
 wget https://getcomposer.org/installer -O composer.phar
 php composer.phar
-php composer.phar install --dev
+php composer.phar install --no-dev
 ```
-按照Wiki原先的内容，最后一行指令使用的是“--no-dev”，但考虑到我们使用的是dev分支，所以我尝试修改成了“--dev”，结果也能够正确执行。
+若执行第一行命令时提示“fatal: destination path '.' already exists and is not an empty directory.”，你可以回到wwwroot目录下，使用rm -rf删除sspanel目录（记得先删除.user.ini，否则会提示访问拒绝），然后再mkdir sspanel，进入目录重新执行命令。
 
 接下来，准备好面板程序的配置文件：
 ```
@@ -429,20 +414,20 @@ php xcat Migration new
 php xcat Tool importAllSettings
 php xcat Tool createAdmin
 ```
-原文还有php xcat ClientDownload，作用是下载clash之类的客户端压缩包到网站下，以便用户可以点击下载。但我是使用V2RayN和V2RayNG，所以过后再手动下载。另外，上述代码全部用于全新部署的情况。如果你是旧版升级或迁移，请先不要执行上述php xcat，具体参见下一节内容。
+原文还有php xcat ClientDownload，作用是下载clash和singbox客户端压缩包到网站下，以便用户可以点击下载。但我是使用V2RayN和V2RayNG，所以过后再手动下载。另外，上述代码全部用于全新部署的情况。如果你是旧版升级或迁移，请先不要执行上述php xcat，具体参见下一节内容。
 
-最后，使用crontab -e添加一个计划任务，以实现等级过期等检测：
+最后，使用crontab -e添加一个计划任务，以实现等级过期等检测（Ubuntu系统会提示你选择一个编辑方式，使用第一个nano即可）：
 ```
 */5 * * * * /usr/local/php/bin/php /home/wwwroot/sspanel/xcat  Cron
 ```
-注意检查后半部分网站目录是否正确，添加好后:wq回车，保存退出即可。
+注意检查后半部分网站目录是否正确，添加好后保存退出（nano为Ctrl+O，回车保存，然后Ctrl+X退出）。
 
 **最后一步非常重要！** 确保自己当前还在sspanel目录下，执行以下命令设置网站文件的权限：
 ```
 chmod -R 777 *
 chown -R root *
 ```
-官方Wiki中，使用的是755权限和www用户。但实际上，我们在安装LNMP客户端时并没有生成www用户，而且在我的环境下，755权限还是有可能会报502 Bad Gateway，所以干脆偷懒直接使用root账户和777权限。理论上来说，这样设置是十分不安全的，但对于自己身边小规模的使用而言，也无所谓安不安全了。
+官方Wiki中，使用的是755权限和www-data用户。但实际上，我们在安装LNMP客户端时并没有生成www-data用户，而且在我的环境下，755权限还是有可能会报502 Bad Gateway，所以干脆偷懒直接使用root账户和777权限。理论上来说，这样设置是十分不安全的，但对于自己身边小规模的使用而言，也无所谓安不安全了。
 
 如果有安全性方面的需求，请自行研究为Nginx、数据库等创建www账户的相关文章，本文不再赘述。
 
@@ -510,7 +495,7 @@ UPDATE user SET api_token = uuid
 
 **2.5 新面板用户密码加密方式的应对**
 
-目前最新版的SSPanel-Uim已经删除了用户密码的md5加密算法，转为默认使用bycrypt。而bycrypt加密后存储在user表中的密文显然不可能与md5相同。但也正因如此，直接迁移过来的user表会导致登录时提示密码错误。当务之急是解决admin账户无法登录的问题。
+目前最新版的SSPanel-Uim已经删除了用户密码的md5加密算法，转为默认使用bcrypt。而bcrypt加密后存储在user表中的密文显然不可能与md5相同。但也正因如此，直接迁移过来的user表会导致登录时提示密码错误。当务之急是解决admin账户无法登录的问题。
 
 此时有两个解决方案，第一种很简单，在数据库中删掉admin账户，然后回到SSH，使用php xcat重建管理员账户：
 ```
@@ -552,24 +537,52 @@ server {
 #### 4. Windows及Android客户端的文件包下载
 <details><summary>点击展开</summary>
 
-如果大家使用的客户端是clash，那么可以直接执行php xcat ClientDownload，这样在面板里就可以直接下载到Clash了。事实上，当前面板的订阅下发风格也在无限向Clash趋近。但我个人并不太喜欢用Clash，而是使用V2Ray和V2RayNG的方案（当然，iOS似乎只有Clash兼容客户端，例如Shadowrocket），因此上述命令并不能完成这项工作，于是我们要手动下载客户端文件包。
+如果大家使用的客户端是clash，那么可以直接执行php xcat ClientDownload，这样在面板里就可以直接下载到Clash了。事实上，当前面板的订阅下发风格也在无限向Clash趋近。但我个人并不太喜欢用Clash，而是使用V2Ray和V2RayNG的方案（当然，iOS似乎只有Clash兼容客户端，例如Shadowrocket），因此上述命令并不能直接完成任务，我们可以手动修改config目录下的clients.json，让它能够自动下载更多的客户端。
 
-前往[V2RayN的Release页面](https://github.com/2dust/v2rayN/releases)，复制“v2rayN-with-Core.zip”的下载链接（此处以6.27版为例），然后回到SSH，进入网站主页所在目录，创建clients文件夹并获取文件包：
+找到之前一个客户端对应节的最后一个“{”,并在后面手动加入逗号，然后补充v2rayN和v2rayNG的内容，效果如下：
 ```
-cd /home/wwwroot/sspanel/public
-mkdir clients && cd clients
-wget https://github.com/2dust/v2rayN/releases/download/6.27/v2rayN-With-Core.zip
+（前文略）  
+            ]
+        },
+        {
+        	  "name": "v2rayNG",
+            "tagMethod": "github_release",
+            "gitRepo": "2dust/v2rayNG",
+            "savePath": "public/clients/",
+            "downloads": [
+                {
+                    "sourceName": "v2rayNG_1%tagName1%_arm64-v8a.apk",
+                    "saveName": "v2rayNG.apk"
+                }
+            ]    
+        },
+        {
+        	  "name": "v2rayN",
+            "tagMethod": "github_release",
+            "gitRepo": "2dust/v2rayN",
+            "savePath": "public/clients/",
+            "downloads": [
+                {
+                    "sourceName": "v2rayN-With-Core.zip",
+                    "saveName": "v2rayN-With-Core.zip"
+                }
+            ]
+        }
+（后文略）
 ```
-此时再前往[V2RayNG的Release页面](https://github.com/2dust/v2rayNG/releases)，复制apk的下载链接（此处以1.8.5_arm64-v8a为例，不带架构后缀的则为32位、64位全兼容版本），并回到SSH中下载：
+保存后执行php xcat ClientDownload即可自动下载最新版本的客户端。
+
+其中，v2rayNG的sourceName有点奇怪，不知道为什么，直接使用%tagName1%会导致执行时版本号识别成“.x.x”，而少了开头的“1”（如1.8.5会被识别成.8.5），导致git提示404下载失败。所以手动添加了个1在前面，让它能够正确下载。如果还是失败，请参照以下步骤手动下载：
+
+先进入网站的public/clients目录，前往[V2RayNG的Release页面](https://github.com/2dust/v2rayNG/releases)，复制apk的下载链接（此处以1.8.5_arm64-v8a为例，不带架构后缀的则为32位、64位全兼容版本），并回到SSH中下载：
 ```
 wget https://github.com/2dust/v2rayNG/releases/download/1.8.5/v2rayNG_1.8.5_arm64-v8a.apk
 ```
 之后修改好客户端文件包的名称：
 ```
-mv v2rayN-With-Core.zip v2rayN-Core.zip
 mv v2rayNG_1.8.5_arm64-v8a.apk v2rayNG.apk
 ```
-此时回到面板的“传统订阅”处，检查客户端是否能正常下载。如果报错，可以再次为网站目录或这两个文件包设置777权限和root账户，具体参见本节第1点末尾。
+此时回到面板的“传统订阅”处，检查客户端是否能正常下载。如果报错，可以再次为整个网站目录或这两个文件包设置777权限和root账户，具体参见本节第1点末尾。
 
 </details>
 
@@ -589,11 +602,14 @@ mv v2rayNG_1.8.5_arm64-v8a.apk v2rayNG.apk
 #### 三、部署XrayR后端的要点
 
 #### 1. 下载并安装XrayR
+<details><summary>点击展开</summary>
 
 执行以下命令，安装XrayR最新版：
 ```
 wget -N https://raw.githubusercontent.com/XrayR-project/XrayR-release/master/install.sh && bash install.sh
 ```
+
+</details>
 
 #### 2. 节点信息填写以及Custom-config
 <details><summary>点击展开</summary>
@@ -642,7 +658,7 @@ ApiHost: "https://www.example.com" #SSPanel面板的网址
 
 **可选：如果安装了SSL Preread模块**
 
-此时你可以在nginx.conf中添加stream节来实现同个SSL端口到不同监听端口的分流，也就是V2Ray和Trojan共存。当然你不需要共存也可以进行这步，个人体感是提升了SSL端口的存活率，不容易被封，但实际效果未经验证。
+此时你可以在nginx.conf中添加stream节来实现同个SSL端口到不同监听端口的分流，也就是V2Ray和Trojan客户端共存（尤其是像soga这样的后端，如果不进行此操作的话，其默认就会监听）。当然你不需要共存也可以进行这步，个人体感是提升了SSL端口的存活率，不容易被封，但实际效果未经验证。
 
 编辑/usr/local/nginx/conf/nginx.conf文件，在events节之后、http节之前添加内容，最终的效果大致如下：
 ```
@@ -661,7 +677,7 @@ stream {
         v2r.example.com vmess;
     #    trj.example.com trojan;
     # default value for not matching any of above
-        default trojan;
+        default vmess;
     }
 
 #   upstream web {
@@ -692,7 +708,7 @@ http
 ```
 其中，“v2r.example.com vmess”为“Xray后端使用的域名 转发到的名字”，请首先修改域名。名字对应下方的“upstream vmess”。因此“vmess”等名字你也可以自行修改。listen 443即SSL端口，在不需要跑网站的服务器上，个人建议将它修改成别的端口。注意修改后节点的Custom-config中的port_user需要一并修改。
 
-当然，就算你修改了，也不会影响未经此处转发的网站。例如：在此处设置了一个SSL端口为1443，而你又用lnmp vhost add添加了另一个网站并设置SSL，也没有在这里设置stream转发，那么该网站不会受到这边1443端口的影响，依旧按照网站配置文件中的SSL端口（默认443）进行监听。
+当然，就算你修改了，也不会影响未经此处转发的网站。例如：在stream这里设置了一个SSL端口为4443，而你又用lnmp vhost add添加了另一个网站并设置SSL，但没有在这里设置stream转发，那么该网站不会受到这边4443端口的影响，依旧按照网站配置文件中的SSL端口（默认443）进行监听。
 
 **必须：修改网站配置文件**
 
